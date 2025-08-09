@@ -32,7 +32,12 @@
   {% endif %}
   
   <label>
-    <span>{% if images and images | length > 0 %}Add new images{% else %}Images{% endif %}</span>
+    <span>{% if images and images | length > 0 %}Update main image{% else %}Main Image (Hero/Preview){% endif %}</span>
+    <input type="file" name="main_image" accept="image/*" />
+  </label>
+  
+  <label>
+    <span>{% if images and images | length > 0 %}Add more gallery images{% else %}Additional Images (Gallery){% endif %}</span>
     <input type="file" name="images" accept="image/*" multiple />
   </label>
   

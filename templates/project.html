@@ -5,18 +5,18 @@
   <h1>{{ project.title }}</h1>
   <p class="meta">{{ project.created_at }}</p>
   {% if images and images | length > 0 %}
-    <img class="hero" src="{{ images[0] }}" alt="{{ project.title }}"/>
+    <img class="hero" src="{{ images[0] }}" alt="{{ project.title }}" onclick="openModal(0)"/>
     {% if images | length > 1 %}
       <div class="gallery">
         {% for img in images %}
           {% if not loop.first %}
-            <img src="{{ img }}" alt="{{ project.title }} image {{ loop.index }}"/>
+            <img src="{{ img }}" alt="{{ project.title }} image {{ loop.index }}" onclick="openModal({{ loop.index0 }})"/>
           {% endif %}
         {% endfor %}
       </div>
     {% endif %}
   {% elif project.image_path %}
-    <img class="hero" src="{{ project.image_path }}" alt="{{ project.title }}"/>
+    <img class="hero" src="{{ project.image_path }}" alt="{{ project.title }}" onclick="openModal(0)"/>
   {% endif %}
   <p class="summary">{{ project.summary }}</p>
   <div class="content">{{ project.content | format_content | safe }}</div>
@@ -30,4 +30,104 @@
     </div>
   </div>
 </article>
+
+<!-- Image Modal -->
+<div id="imageModal" class="modal">
+  <span class="modal-close" onclick="closeModal()">&times;</span>
+  <div class="modal-content">
+    <img id="modalImage" class="modal-image" src="" alt=""/>
+    <div class="modal-nav">
+      <button id="prevBtn" class="modal-nav-btn modal-prev" onclick="changeImage(-1)">&lt;</button>
+      <div class="modal-counter">
+        <span id="imageCounter">1</span> / <span id="totalImages">1</span>
+      </div>
+      <button id="nextBtn" class="modal-nav-btn modal-next" onclick="changeImage(1)">&gt;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const images = [
+  {% if images and images | length > 0 %}
+    {% for img in images %}
+      "{{ img }}"{% if not loop.last %},{% endif %}
+    {% endfor %}
+  {% elif project.image_path %}
+    "{{ project.image_path }}"
+  {% endif %}
+];
+
+let currentImageIndex = 0;
+
+function openModal(index) {
+  currentImageIndex = index;
+  const modal = document.getElementById('imageModal');
+  const modalImg = document.getElementById('modalImage');
+  const counter = document.getElementById('imageCounter');
+  const total = document.getElementById('totalImages');
+  
+  modal.style.display = 'block';
+  modalImg.src = images[currentImageIndex];
+  counter.textContent = currentImageIndex + 1;
+  total.textContent = images.length;
+  
+  updateNavButtons();
+}
+
+function changeImage(direction) {
+  currentImageIndex += direction;
+  if (currentImageIndex >= images.length) currentImageIndex = 0;
+  if (currentImageIndex < 0) currentImageIndex = images.length - 1;
+  
+  const modalImg = document.getElementById('modalImage');
+  const counter = document.getElementById('imageCounter');
+  
+  modalImg.src = images[currentImageIndex];
+  counter.textContent = currentImageIndex + 1;
+  
+  updateNavButtons();
+}
+
+function updateNavButtons() {
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  
+  if (images.length <= 1) {
+    prevBtn.style.display = 'none';
+    nextBtn.style.display = 'none';
+  } else {
+    prevBtn.style.display = 'block';
+    nextBtn.style.display = 'block';
+  }
+}
+
+function closeModal() {
+  document.getElementById('imageModal').style.display = 'none';
+}
+
+// Close modal when clicking outside the image
+document.getElementById('imageModal').onclick = function(event) {
+  if (event.target === this) {
+    closeModal();
+  }
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', function(event) {
+  const modal = document.getElementById('imageModal');
+  if (modal.style.display === 'block') {
+    switch(event.key) {
+      case 'Escape':
+        closeModal();
+        break;
+      case 'ArrowLeft':
+        changeImage(-1);
+        break;
+      case 'ArrowRight':
+        changeImage(1);
+        break;
+    }
+  }
+});
+</script>
 {% endblock content %}

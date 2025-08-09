@@ -4,10 +4,11 @@ A Rust web application for showcasing projects with image galleries, built with 
 
 ## Features
 
-- **Project Management**: Full CRUD operations for projects
+- **Project Management**: Full CRUD operations for projects (no authentication required)
 - **Multi-Image Gallery**: Upload and display multiple images per project
+- **Main Image Support**: Separate upload field for hero/preview image
 - **Content Formatting**: Single-line markdown-style content that displays as formatted HTML
-- **Authentication**: Basic auth for admin operations
+- **Image Modal Gallery**: Click images to open fullscreen gallery with navigation
 - **Docker Support**: Containerized deployment
 
 ## Tech Stack
@@ -23,7 +24,7 @@ A Rust web application for showcasing projects with image galleries, built with 
 ```bash
 # Build and run Docker container
 docker build -t acho-site .
-docker run --rm -p 3000:3000 -v "$PWD/uploads:/app/uploads" -v "$PWD/data:/app/data" -e RUST_LOG=info -e ADMIN_USER=admin -e ADMIN_PASS=Aa6812121101 acho-site
+docker run --rm -p 3000:3000 -v "$PWD/uploads:/app/uploads" -v "$PWD/data:/app/data" -e RUST_LOG=info acho-site
 
 # Local development
 cargo run
@@ -33,11 +34,11 @@ cargo run
 
 - `GET /` - List all projects
 - `GET /projects/:id` - View individual project with gallery
-- `GET /admin/new` - New project form (auth required)
-- `POST /admin/new` - Create project (auth required)
-- `GET /admin/edit/:id` - Edit project form (auth required)  
-- `POST /admin/edit/:id` - Update project (auth required)
-- `POST /admin/delete/:id` - Delete project (auth required)
+- `GET /admin/new` - New project form
+- `POST /admin/new` - Create project
+- `GET /admin/edit/:id` - Edit project form
+- `POST /admin/edit/:id` - Update project
+- `POST /admin/delete/:id` - Delete project
 
 ## Database Schema
 
@@ -59,6 +60,20 @@ CREATE TABLE images (
 );
 ```
 
+## Image Management
+
+### Upload Fields
+- **Main Image**: Single upload for hero/preview image (stored in `projects.image_path`)
+- **Additional Images**: Multiple uploads for gallery images
+
+### Gallery Features
+- **Modal Viewer**: Click any image to open fullscreen gallery
+- **Navigation**: Previous/Next buttons and keyboard arrows
+- **Image Counter**: Shows current position (e.g., "2 / 5")
+- **Keyboard Controls**: 
+  - Arrow keys to navigate
+  - Escape to close
+
 ## Content Formatting
 
 The application includes a custom Tera filter `format_content` that converts single-line markdown-style formatting to HTML:
@@ -69,12 +84,6 @@ The application includes a custom Tera filter `format_content` that converts sin
 - `- List item` → `<li>List item</li>`
 - Regular text → `<p>Regular text</p>`
 
-## Authentication
-
-Admin operations require Basic Authentication:
-- Username: Set via `ADMIN_USER` env var (default: "admin")
-- Password: Set via `ADMIN_PASS` env var (default: "admin")
-
 ## File Storage
 
 - Images uploaded to `/uploads` directory
@@ -83,8 +92,9 @@ Admin operations require Basic Authentication:
 
 ## Recent Updates
 
-- Added full edit/delete functionality for projects
-- Implemented custom content formatting filter
-- Enhanced gallery support with multiple images
-- Added professional UI styling with action buttons
-- Fixed SQLite async compatibility issues
+- **Removed Authentication**: Admin operations no longer require authentication
+- **Enhanced Image Management**: Separate main image and gallery image uploads
+- **Interactive Gallery**: Modal viewer with navigation and keyboard controls
+- **Improved Error Handling**: Better multipart form parsing
+- **Content Formatting**: Custom filter for markdown-style single-line content
+- **Professional UI**: Edit/delete buttons, modern styling, responsive design

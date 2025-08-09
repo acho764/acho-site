@@ -1,18 +1,16 @@
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use axum::{
     extract::{Multipart, Path},
-    http::{HeaderValue, Request, StatusCode},
-    middleware::{self, Next},
-    response::{Html, IntoResponse, Redirect, Response},
+    http::StatusCode,
+    response::{Html, IntoResponse, Redirect},
     routing::{get, post},
     Extension, Router,
 };
-use base64::Engine;
 use chrono::{DateTime, Utc};
 use r2d2::{Pool};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, OptionalExtension};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tera::{Context, Tera, Value, Result as TeraResult};
 use tower_http::services::ServeDir;
@@ -162,22 +160,10 @@ async fn main() {
         .route("/", get(list_projects))
         .route("/projects/:id", get(view_project_handler))
         .route("/admin/new", get(new_project_form))
-        .route(
-            "/admin/new",
-            post(create_project).route_layer(middleware::from_fn(auth_middleware)),
-        )
-        .route(
-            "/admin/edit/:id", 
-            get(edit_project_form).route_layer(middleware::from_fn(auth_middleware))
-        )
-        .route(
-            "/admin/edit/:id",
-            post(update_project).route_layer(middleware::from_fn(auth_middleware)),
-        )
-        .route(
-            "/admin/delete/:id",
-            post(delete_project).route_layer(middleware::from_fn(auth_middleware)),
-        )
+        .route("/admin/new", post(create_project))
+        .route("/admin/edit/:id", get(edit_project_form))
+        .route("/admin/edit/:id", post(update_project))
+        .route("/admin/delete/:id", post(delete_project))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/uploads", ServeDir::new("uploads"))
         .layer(Extension(state));
@@ -336,9 +322,10 @@ async fn create_project(Extension(state): Extension<AppState>, mut multipart: Mu
     let mut title: Option<String> = None;
     let mut summary: Option<String> = None;
     let mut content: Option<String> = None;
+    let mut main_image_path: Option<String> = None;
     let mut image_rel_paths: Vec<String> = Vec::new();
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
+    while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "title" => {
@@ -349,6 +336,28 @@ async fn create_project(Extension(state): Extension<AppState>, mut multipart: Mu
             }
             "content" => {
                 content = Some(field.text().await.unwrap_or_default());
+            }
+            "main_image" => {
+                if let Some(file_name) = field.file_name().map(|s| s.to_string()) {
+                    if !file_name.is_empty() {
+                        let sanitized = sanitize_filename::sanitize(&file_name);
+                        let ext = std::path::Path::new(&sanitized)
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("");
+                        let ts = chrono::Utc::now().timestamp();
+                        let uid = uuid::Uuid::new_v4();
+                        let new_name = if ext.is_empty() {
+                            format!("{}-{}", ts, uid)
+                        } else {
+                            format!("{}-{}.{}", ts, uid, ext)
+                        };
+                        let save_path = state.upload_dir.join(&new_name);
+                        let bytes = field.bytes().await.unwrap_or_default();
+                        tokio::fs::write(&save_path, &bytes).await.unwrap();
+                        main_image_path = Some(format!("/uploads/{}", new_name));
+                    }
+                }
             }
             "image" | "images" => {
                 if let Some(file_name) = field.file_name().map(|s| s.to_string()) {
@@ -384,29 +393,34 @@ async fn create_project(Extension(state): Extension<AppState>, mut multipart: Mu
     let created_at = Utc::now();
 
     let conn = state.db.get().unwrap();
-    // Use first image as preview on the project row
-    let preview = image_rel_paths.get(0).cloned();
+    
     conn.execute(
         "INSERT INTO projects (title, summary, content, image_path, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![
             title,
             summary,
             content,
-            preview,
+            main_image_path,
             created_at.to_rfc3339(),
         ],
     )
     .unwrap();
     let id = conn.last_insert_rowid();
 
-    // Insert all images
-    if !image_rel_paths.is_empty() {
+    // Insert all images (main image first, then additional images)
+    let mut all_images = Vec::new();
+    if let Some(main_img) = &main_image_path {
+        all_images.push(main_img.clone());
+    }
+    all_images.extend(image_rel_paths);
+    
+    if !all_images.is_empty() {
         let tx = conn.unchecked_transaction().unwrap();
         {
             let mut stmt = tx
                 .prepare("INSERT INTO images (project_id, path) VALUES (?1, ?2)")
                 .unwrap();
-            for pth in &image_rel_paths {
+            for pth in &all_images {
                 stmt.execute(params![id, pth]).unwrap();
             }
         }
@@ -416,7 +430,6 @@ async fn create_project(Extension(state): Extension<AppState>, mut multipart: Mu
     Redirect::to(&format!("/projects/{}", id)).into_response()
 }
 
-// Basic auth middleware for POST /admin/new
 async fn delete_project(Path(id): Path<i64>, Extension(state): Extension<AppState>) -> impl IntoResponse {
     let conn = match state.db.get() {
         Ok(conn) => conn,
@@ -516,10 +529,11 @@ async fn update_project(Path(id): Path<i64>, Extension(state): Extension<AppStat
     let mut title: Option<String> = None;
     let mut summary: Option<String> = None;
     let mut content: Option<String> = None;
+    let mut main_image_path: Option<String> = None;
     let mut new_image_paths: Vec<String> = Vec::new();
     let mut keep_existing_images = false;
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
+    while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "title" => {
@@ -533,6 +547,28 @@ async fn update_project(Path(id): Path<i64>, Extension(state): Extension<AppStat
             }
             "keep_images" => {
                 keep_existing_images = field.text().await.unwrap_or_default() == "on";
+            }
+            "main_image" => {
+                if let Some(file_name) = field.file_name().map(|s| s.to_string()) {
+                    if !file_name.is_empty() {
+                        let sanitized = sanitize_filename::sanitize(&file_name);
+                        let ext = std::path::Path::new(&sanitized)
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("");
+                        let ts = chrono::Utc::now().timestamp();
+                        let uid = uuid::Uuid::new_v4();
+                        let new_name = if ext.is_empty() {
+                            format!("{}-{}", ts, uid)
+                        } else {
+                            format!("{}-{}.{}", ts, uid, ext)
+                        };
+                        let save_path = state.upload_dir.join(&new_name);
+                        let bytes = field.bytes().await.unwrap_or_default();
+                        tokio::fs::write(&save_path, &bytes).await.unwrap();
+                        main_image_path = Some(format!("/uploads/{}", new_name));
+                    }
+                }
             }
             "image" | "images" => {
                 if let Some(file_name) = field.file_name().map(|s| s.to_string()) {
@@ -599,9 +635,9 @@ async fn update_project(Path(id): Path<i64>, Extension(state): Extension<AppStat
         }
     }
     
-    // Update project
-    let preview = if !new_image_paths.is_empty() {
-        new_image_paths.get(0).cloned()
+    // Update project - use new main image or keep existing
+    let preview = if main_image_path.is_some() {
+        main_image_path.clone()
     } else if keep_existing_images {
         // Keep existing preview if keeping images
         conn.query_row(
@@ -622,14 +658,20 @@ async fn update_project(Path(id): Path<i64>, Extension(state): Extension<AppStat
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Update failed").into_response(),
     }
 
-    // Insert new images
-    if !new_image_paths.is_empty() {
+    // Insert new images (main image first, then additional images)
+    let mut all_new_images = Vec::new();
+    if let Some(main_img) = &main_image_path {
+        all_new_images.push(main_img.clone());
+    }
+    all_new_images.extend(new_image_paths);
+    
+    if !all_new_images.is_empty() {
         let tx = conn.unchecked_transaction().unwrap();
         {
             let mut stmt = tx
                 .prepare("INSERT INTO images (project_id, path) VALUES (?1, ?2)")
                 .unwrap();
-            for pth in &new_image_paths {
+            for pth in &all_new_images {
                 stmt.execute(params![id, pth]).unwrap();
             }
         }
@@ -639,34 +681,3 @@ async fn update_project(Path(id): Path<i64>, Extension(state): Extension<AppStat
     Redirect::to(&format!("/projects/{}", id)).into_response()
 }
 
-async fn auth_middleware<B>(req: Request<B>, next: Next<B>) -> Response {
-    const REALM: &str = "Basic realm=\"Admin\"";
-
-    let unauthorized = || {
-        let mut res = (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-        res.headers_mut()
-            .insert(axum::http::header::WWW_AUTHENTICATE, HeaderValue::from_static(REALM));
-        res
-    };
-
-    let headers = req.headers();
-    let Some(auth_value) = headers.get(axum::http::header::AUTHORIZATION) else {
-        return unauthorized();
-    };
-    let Ok(auth_str) = auth_value.to_str() else { return unauthorized(); };
-    let Some(encoded) = auth_str.strip_prefix("Basic ") else { return unauthorized(); };
-    let Ok(decoded_bytes) = base64::engine::general_purpose::STANDARD.decode(encoded) else {
-        return unauthorized();
-    };
-    let Ok(decoded) = String::from_utf8(decoded_bytes) else { return unauthorized(); };
-    let parts: Vec<&str> = decoded.splitn(2, ':').collect();
-    if parts.len() != 2 { return unauthorized(); }
-    let (user, pass) = (parts[0], parts[1]);
-    let expected_user = std::env::var("ADMIN_USER").unwrap_or_else(|_| "admin".to_string());
-    let expected_pass = std::env::var("ADMIN_PASS").unwrap_or_else(|_| "admin".to_string());
-    if user != expected_user || pass != expected_pass {
-        return unauthorized();
-    }
-
-    next.run(req).await
-}
