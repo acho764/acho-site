@@ -1,0 +1,2 @@
+#!/bin/bash
+docker run --rm -p 3000:3000 -v "$PWD/uploads:/app/uploads" -v "$PWD/data:/app/data" -e RUST_LOG=info -e ADMIN_USER=admin -e ADMIN_PASS=pass acho-site

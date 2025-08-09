@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ project.title }}{% endblock title %}
+{% block content %}
+<article class="project">
+  <h1>{{ project.title }}</h1>
+  <p class="meta">{{ project.created_at }}</p>
+  {% if images and images | length > 0 %}
+    <img class="hero" src="{{ images[0] }}" alt="{{ project.title }}"/>
+    {% if images | length > 1 %}
+      <div class="gallery">
+        {% for img in images %}
+          {% if not loop.first %}
+            <img src="{{ img }}" alt="{{ project.title }} image {{ loop.index }}"/>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% elif project.image_path %}
+    <img class="hero" src="{{ project.image_path }}" alt="{{ project.title }}"/>
+  {% endif %}
+  <p class="summary">{{ project.summary }}</p>
+  <div class="content">{{ project.content | format_content | safe }}</div>
+  <div class="project-actions">
+    <a href="/">← Back</a>
+    <div class="admin-actions">
+      <a href="/admin/edit/{{ project.id }}" class="button-edit">Edit</a>
+      <form method="post" action="/admin/delete/{{ project.id }}" style="display: inline-block;">
+        <button type="submit" class="button-delete" onclick="return confirm('Are you sure you want to delete this project? This action cannot be undone.')">Delete</button>
+      </form>
+    </div>
+  </div>
+</article>
+{% endblock content %}

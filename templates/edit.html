@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Edit Project{% endblock title %}
+{% block content %}
+<h1>Edit Project</h1>
+<form class="form" action="/admin/edit/{{ project.id }}" method="post" enctype="multipart/form-data">
+  <label>
+    <span>Title</span>
+    <input type="text" name="title" value="{{ project.title }}" required />
+  </label>
+  <label>
+    <span>Summary</span>
+    <input type="text" name="summary" value="{{ project.summary }}" />
+  </label>
+  <label>
+    <span>Content (Single line with markdown-style formatting)</span>
+    <textarea name="content" rows="10">{{ project.content }}</textarea>
+  </label>
+  
+  {% if images and images | length > 0 %}
+    <div class="existing-images">
+      <h3>Current Images</h3>
+      <div class="gallery">
+        {% for img in images %}
+          <img src="{{ img }}" alt="Current image {{ loop.index }}"/>
+        {% endfor %}
+      </div>
+      <label>
+        <input type="checkbox" name="keep_images" checked />
+        <span>Keep existing images</span>
+      </label>
+    </div>
+  {% endif %}
+  
+  <label>
+    <span>{% if images and images | length > 0 %}Add new images{% else %}Images{% endif %}</span>
+    <input type="file" name="images" accept="image/*" multiple />
+  </label>
+  
+  <div class="form-actions">
+    <button type="submit">Update Project</button>
+    <a href="/projects/{{ project.id }}" class="button-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock content %}

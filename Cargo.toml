@@ -1,0 +1,21 @@
+[package]
+name = "acho-site"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.6", features = ["multipart"] }
+tokio = { version = "1.39", features = ["full"] }
+tera = "1.19"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower-http = { version = "0.4", features = ["fs", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.8", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.24"
+sanitize-filename = "0.5"
+base64 = "0.21"

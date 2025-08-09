@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Projects{% endblock title %}
+{% block content %}
+<h1>Projects</h1>
+<div class="grid">
+  {% for p in projects %}
+    <article class="card">
+      <a href="/projects/{{ p.id }}">
+        {% if p.image_path %}
+          <img src="{{ p.image_path }}" alt="{{ p.title }}"/>
+        {% endif %}
+        <h2>{{ p.title }}</h2>
+      </a>
+      <p class="summary">{{ p.summary }}</p>
+      <p class="meta">{{ p.created_at }}</p>
+    </article>
+  {% else %}
+    <p>No projects yet. <a href="/admin/new">Create one</a>.</p>
+  {% endfor %}
+</div>
+{% endblock content %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}New Project{% endblock title %}
+{% block content %}
+<h1>New Project</h1>
+<form class="form" action="/admin/new" method="post" enctype="multipart/form-data">
+  <label>
+    <span>Title</span>
+    <input type="text" name="title" required />
+  </label>
+  <label>
+    <span>Summary</span>
+    <input type="text" name="summary" />
+  </label>
+  <label>
+    <span>Content (HTML allowed)</span>
+    <textarea name="content" rows="10"></textarea>
+  </label>
+  <label>
+    <span>Images</span>
+    <input type="file" name="images" accept="image/*" multiple />
+  </label>
+  <button type="submit">Create</button>
+</form>
+{% endblock content %}
